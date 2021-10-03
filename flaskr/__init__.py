@@ -4,6 +4,7 @@ from flask_cors import CORS
 
 _app = None
 
+
 def create_app():
     _app = app = Flask(__name__, instance_relative_config=True)
     CORS(app, resources={
@@ -21,9 +22,15 @@ def create_app():
         return '<h1>Hi! You are accessing my root! <a href="https://github.com/KnackHops/Document_API">Here is the link for the api!</a><h1>'
 
     from . import document
+    from . import user
 
-    for compo in (document,):
+    for compo in [document, user]:
         app.register_blueprint(compo.bp)
+
+    @app.after_request
+    def after_request_func(response):
+        response.headers['Content-Type'] = 'application/json'
+        return response
 
     return app
 
