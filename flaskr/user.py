@@ -2,7 +2,7 @@ from flask import (
     Blueprint, request, make_response
 )
 
-from . import temp_db
+from flaskr import temp_db
 
 bp = Blueprint("user", __name__)
 user_data = temp_db.user_data
