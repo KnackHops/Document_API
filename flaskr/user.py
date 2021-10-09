@@ -27,6 +27,7 @@ def admin_fetch():
 
                         users.append({
                             'id': user['id'],
+                            'fullname': user['fullname'],
                             'username': user_login['username'],
                             'role': user['role'],
                             'activated': user['activated']
@@ -55,6 +56,7 @@ def friend_fetch():
                                 if user['id'] == user_login['id'] and user['activated']:
                                     users.append({
                                         'id': user_login['id'],
+                                        'fullname': user['fullname'],
                                         'username': user_login['username'],
                                         'isSubordinate': True,
                                         'mobile': user['mobile'],
@@ -74,6 +76,7 @@ def friend_fetch():
                         if user['id'] == user_login['id'] and user['activated']:
                             users.append({
                                 'id': user_login['id'],
+                                'fullname': user['fullname'],
                                 'username': user_login['username'],
                                 'isSubordinate': False
                             })
@@ -257,6 +260,7 @@ def register():
 
             new_user = {
                 'id': id,
+                'fullname': request.json['fullname'],
                 'email': request.json['email'],
                 'mobile': request.json['mobile'],
                 'role': "normal",
@@ -356,3 +360,33 @@ def remove_subordinate():
             return '', 204
         else:
             return {'error': 'not a subordinate in the first place'}, 409
+
+
+@bp.route('/update-user', methods=('GET', 'PUT'))
+def update_user():
+    if request.method == 'PUT':
+        userid = request.json['userid']
+        val = request.json['val']
+        which = request.json['which']
+        global user_data
+
+        if len(user_data) > 0:
+
+            for user in user_data:
+                if user[which] == val:
+                    return {'error': f'This {which} is already being used!'}, 409
+
+            _update_user_data = []
+
+            for user in user_data:
+                each_user = user
+                if user['id'] == userid:
+                    each_user[which] = val
+
+                _update_user_data.append(each_user)
+
+            user_data = _update_user_data
+            return '', 204
+        else:
+            return {'error': 'no user detected'}, 409
+
