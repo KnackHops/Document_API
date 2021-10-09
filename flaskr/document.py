@@ -3,12 +3,14 @@ from flask import (
 )
 
 from . import temp_db
+from . import _qrcode
 
 bp = Blueprint("document", __name__, url_prefix="/document")
 
 docu_lists = temp_db.docu_lists
 user_pinned = temp_db.user_pinned
 login_data = temp_db.login_data
+docu_coded = temp_db.docu_coded
 
 
 @bp.route("/fetch/")
@@ -79,22 +81,108 @@ def fetch():
         return make_response(({'_documents': return_doc}, 200))
 
 
+@bp.route("/fetch-qr/")
+def fetch_qr():
+    docid = int(request.args.get('docid'))
+    global docu_coded
+
+    if len(docu_coded) > 0:
+        for doc in docu_coded:
+            if doc['docid'] == docid:
+                return make_response(({'qr_code': doc['qr_code']}, 200))
+    else:
+        return '', 204
+
+
+@bp.route('/fetch-doc-qr/')
+def fetch_doc_qr():
+    str_code = request.args.get('str_code')
+    userid = request.args.get('userid')
+    global docu_coded
+    global docu_lists
+    global user_pinned
+
+    if len(docu_coded) > 0:
+        for doc in docu_coded:
+            if doc['str_code'] == str_code:
+                docid = doc['docid']
+
+        _doc = None
+        for doc in docu_lists:
+            if doc['id'] == docid:
+                _doc = {
+                    'id': docid,
+                    'title': doc['title'],
+                    'body': doc['document']
+                }
+
+        if not _doc:
+            return '', 204
+
+        if len(user_pinned) == 0:
+            _doc['pinned'] = False
+            return make_response(({'document': _doc}, 200))
+        else:
+            for each_pin in user_pinned:
+                if each_pin['userid'] == userid and each_pin['docid'] == docid:
+                    _doc['pinned'] = True
+
+            if 'pinned' not in _doc:
+                _doc['pinned'] = False
+
+            return make_response(({'document': _doc}, 200))
+
+        return '', 204
+    else:
+        return '', 204
+
+
+def generate_QR(id, title):
+    _id = str(id)
+
+    _id_length = len(_id);
+
+    if _id_length < 6:
+        ran = 6 - _id_length
+
+        filler = ""
+        for c in range(ran):
+            filler = filler + "f"
+        new_id = filler + _id
+
+    str_code = "doc/" + new_id + "/doc/" + title
+
+    return [_qrcode(str_code), str_code]
+
+
 @bp.route("/add", methods=('GET', 'POST'))
 def add():
     if request.method == 'POST':
         global docu_lists
-        
+        global docu_coded
+
+        title = request.json['title']
+        document = request.json['document']
+
         if len(docu_lists) == 0:
             id = 0
-            docu_lists.append({'id': id,
-                               'title': request.json['title'],
-                               'document': request.json['document']})
+
+            qr_code, str_code = generate_QR(id, title)
         else:
             id = docu_lists[-1]['id'] + 1
-            docu_lists.append({'id': id,
-                               'title': request.json['title'],
-                               'document': request.json['document']})
-        return {'id': id}, 200
+
+            qr_code, str_code = generate_QR(id, title)
+
+        docu_lists.append({'id': id,
+                           'title': title,
+                           'document': document})
+        docu_coded.append({
+            'docid': id,
+            'str_code': str_code,
+            'qr_code': qr_code
+        })
+
+        return make_response(({'id': id, 'qr_code': qr_code}, 200))
 
 
 @bp.route("/edit", methods=('GET', 'PUT'))
