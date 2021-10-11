@@ -2,8 +2,8 @@ from flask import (
     Blueprint, request, make_response
 )
 
-from . import temp_db
-from . import _qrcode
+from flaskr import temp_db
+from flaskr import _qrcode
 
 bp = Blueprint("document", __name__, url_prefix="/document")
 
