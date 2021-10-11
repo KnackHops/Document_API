@@ -52,7 +52,7 @@ def create_app():
     global _socketio
     _app = app
     _socketio = socketio
-    return app, socketio
+    return app
 
 
 # _app = create_app()
