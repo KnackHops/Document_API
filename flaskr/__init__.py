@@ -48,17 +48,17 @@ def create_app():
         if not request.path == "/":
             response.headers['Content-Type'] = 'application/json'
         return response
-    global _app
-    global _socketio
-    _app = app
-    _socketio = socketio
-    return app
+    # global _app
+    # global _socketio
+    # _app = app
+    # _socketio = socketio
+    return app, socketio
 
 
 # _app = create_app()
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    # _app.run(host='0.0.0.0', port=port)
-    # _app.run(debug=True)
-    _socketio.run(_app, host='0.0.0.0', port=port)
+# if __name__ == '__main__':
+#     port = int(os.environ.get('PORT', 5000))
+#     # _app.run(host='0.0.0.0', port=port)
+#     # _app.run(debug=True)
+#     _socketio.run(_app, host='0.0.0.0', port=port)
