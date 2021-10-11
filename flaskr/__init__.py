@@ -1,7 +1,7 @@
 import os
 
 from flask import (
-    Flask
+    Flask, request
 )
 from flask_cors import CORS
 from flask_qrcode import QRcode
@@ -33,7 +33,6 @@ def create_app():
 
     @app.route('/')
     def index():
-
         return f'<h1>Hi! You are accessing my root! <a href="https://github.com/KnackHops/Document_API">Here is the link for the api!</a> <h1>'
 
     from flaskr import document
@@ -46,7 +45,8 @@ def create_app():
 
     @app.after_request
     def after_request_func(response):
-        response.headers['Content-Type'] = 'application/json'
+        if not request.path == "/":
+            response.headers['Content-Type'] = 'application/json'
         return response
 
     return app, socketio
