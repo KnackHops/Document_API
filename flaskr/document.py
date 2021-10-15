@@ -4,6 +4,7 @@ from flask import (
 
 from flaskr import temp_db
 from flaskr import _qrcode
+from flaskr import _socketio
 
 bp = Blueprint("document", __name__, url_prefix="/document")
 
@@ -12,6 +13,7 @@ user_pinned = temp_db.user_pinned
 login_data = temp_db.login_data
 docu_coded = temp_db.docu_coded
 
+socketidLists = {}
 
 @bp.route("/fetch/")
 def fetch():
@@ -275,3 +277,16 @@ def unpin_doc():
             return '', 204
         else:
             return {'error': 'error unpin'}, 409
+
+
+@_socketio.event
+def set_socketid(data):
+    new_str = f'user{data["userid"]}'
+    socketidLists[new_str] = request.sid
+    print(socketidLists)
+
+
+@_socketio.event
+def send_doc(data):
+    id_str = f'user{data["userid"]}'
+    _socketio.emit("got_sent", data['docid'], to=socketidLists[id_str])

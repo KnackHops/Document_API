@@ -8,7 +8,7 @@ from flaskr import create_app
 app, socketio = create_app()
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    # port = int(os.environ.get('PORT', 5000))
     # _app.run(host='0.0.0.0', port=port)
     # app.run(debug=True)
-    socketio.run(app, host='0.0.0.0', port=port)
+    socketio.run(app, debug=True)

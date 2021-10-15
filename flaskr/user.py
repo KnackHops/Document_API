@@ -1,3 +1,5 @@
+import random
+
 from flask import (
     Blueprint, request, make_response
 )
@@ -9,6 +11,7 @@ user_data = temp_db.user_data
 login_data = temp_db.login_data
 user_pinned = temp_db.user_pinned
 user_subordinate = temp_db.user_subordinate
+user_email_unverified = temp_db.user_email_unverified
 
 
 @bp.route('/admin-fetch/')
@@ -17,6 +20,7 @@ def admin_fetch():
     # error_code = None
     global login_data
     global user_data
+    global user_email_unverified
 
     if len(login_data) > 1:
         users = []
@@ -24,14 +28,30 @@ def admin_fetch():
             if not user['id'] == 0 and not user['id'] == int(request.args.get('id')):
                 for user_login in login_data:
                     if user_login['id'] == user['id']:
-
-                        users.append({
+                        verified = True
+                        attempt = None
+                        resend = None
+                        if len(user_email_unverified) > 0:
+                            for user_ver in user_email_unverified:
+                                if user_login['id'] == user_ver['userid']:
+                                    verified = False
+                                    attempt = user_ver['attempt']
+                                    resend = user_ver['resend']
+                        return_user = {
                             'id': user['id'],
                             'fullname': user['fullname'],
                             'username': user_login['username'],
                             'role': user['role'],
-                            'activated': user['activated']
-                        })
+                            'activated': user['activated'],
+                            'email_verified': verified,
+                        }
+
+                        if not verified:
+                            return_user['attempt'] = attempt
+                            return_user['resend'] = resend
+
+                        users.append(return_user)
+
     else:
         users = None
 
@@ -145,6 +165,7 @@ def admin_activate():
         id = request.json['id']
         userid = request.json['userid']
         global user_data
+        global user_email_unverified
 
         for user in user_data:
             if id == user['id']:
@@ -155,15 +176,33 @@ def admin_activate():
         if error_code:
             return {'error': error}, error_code
         else:
-            new_user_data = []
-            for user in user_data:
-                if userid == user['id']:
-                    user['activated'] = not user['activated']
-                new_user_data.append(user)
+            isVerif = True
+            if len(user_email_unverified) > 0:
+                for user_verif in user_email_unverified:
+                    if user_verif['userid'] == userid:
+                        isVerif = False
+            if isVerif:
+                new_user_data = []
+                for user in user_data:
+                    upd_user = user
+                    if userid == upd_user['id']:
+                        upd_user['activated'] = not user['activated']
+                    new_user_data.append(upd_user)
 
-            user_data = new_user_data
-            print(user_data)
-            return '', 204;
+                user_data = new_user_data
+                return '', 204
+            else:
+                new_user_data = []
+                for user in user_data:
+                    upd_user = user
+                    if userid == upd_user['id']:
+                        upd_user['role'] = 'normal'
+                        upd_user['activated'] = False
+                    new_user_data.append(upd_user)
+
+                user_data = new_user_data
+
+                return {'error': 'User is not verified!'}, 409
 
 
 @bp.route('/admin-role-change', methods=('GET', 'PUT'))
@@ -204,6 +243,7 @@ def login():
         id = None
         global login_data
         global user_data
+        global user_email_unverified
 
         for user_login in login_data:
             if user_login['username'] == request.json['username']:
@@ -212,19 +252,122 @@ def login():
 
         if id or id == 0:
             return_user = {}
-            for user in user_data:
-                if id == user['id']:
-                    if user['role'] == 'admin':
-                        return_user = user
-                    else:
-                        if user['activated']:
-                            return_user = user
 
+            if len(user_email_unverified) > 0:
+                for user_unv in user_email_unverified:
+                    if id == user_unv['userid']:
+                        return_user['unverified'] = True
+
+            if 'unverified' not in return_user:
+                for user in user_data:
+                    if id == user['id']:
+                        if user['role'] == 'admin':
+                            return_user = user
+                        else:
+                            if user['activated']:
+                                return_user = user
+                            else:
+                                return_user['activated'] = False
+
+            return_user['id'] = id
             return_user['username'] = request.json['username']
 
             return make_response((return_user, 200))
         else:
             return {'error': 'Server Error'}, 500
+
+
+@bp.route('/verify-user', methods=('GET', 'PUT'))
+def verify_user():
+    if request.method == 'PUT':
+        global user_email_unverified
+        if len(user_email_unverified) > 0:
+            error = None
+            userid = request.json['userid']
+            code = request.json['code']
+
+            new_user_list = []
+            for user_unverif in user_email_unverified:
+                new_user = user_unverif
+                if new_user['userid'] == userid:
+                    if new_user['attempt'] < 3:
+                        if not code == new_user['code']:
+                            error = 'Code is incorrect!'
+                            new_user['attempt'] = new_user['attempt'] + 1
+                            new_user_list.append(new_user)
+                    else:
+                        error = "Reach the limit for verification attempt for this user"
+                else:
+                    new_user_list.append(user_unverif)
+
+            user_email_unverified = new_user_list
+
+            if error:
+                return {'error': error}, 409
+            else:
+                return '', 204
+
+        else:
+            return {'error': 'No unverified email'}, 409
+
+
+@bp.route('/resend-verification', methods=('GET', 'PUT'))
+def resend_verification():
+    if request.method == 'PUT':
+        global user_email_unverified
+        userid = request.json['userid']
+        new_code = str(random.randint(1000, 9999))
+
+        if len(user_email_unverified) > 0:
+            new_user_list = []
+            found = False
+            error = None
+
+            for user_unverif in user_email_unverified:
+                new_user = user_unverif
+                if new_user['userid'] == userid:
+                    found = True
+                    if new_user['resend'] < 3:
+                        new_user['code'] = new_code
+                        user_email = new_user['email']
+                        username = new_user['username']
+                        new_user['resend'] = new_user['resend'] + 1
+                    else:
+                        error = 'Reach resend limit of three for this user'
+
+                new_user_list.append(new_user)
+
+            if found:
+                if error:
+                    return {'error': error}, 409
+                else:
+                    success_email = send_email(username, new_code, user_email)
+                    return '', 204
+            else:
+                return {'error': 'User is verified!'}, 409
+
+        else:
+            return {'error': 'No unverified email'}, 409
+
+
+@bp.route('/reset-user-verify-info', methods=('GET', 'PUT'))
+def reset_user_attempt():
+    if request.method == 'PUT':
+        userid = request.json['userid']
+        which_change = request.json['which_change']
+
+        if len(user_email_unverified) > 0:
+            found = False
+            for user_verif in user_email_unverified:
+                if user_verif['userid'] == userid:
+                    found = True
+                    user_verif[which_change] = 0
+            if found:
+                return '', 204
+            else:
+                return {'error': 'user not found'}, 409
+        else:
+            return {'error': 'error resetting info'}, 409
 
 
 @bp.route('/register', methods=('GET', 'POST'))
@@ -234,6 +377,7 @@ def register():
         error_code = None
         global login_data
         global user_data
+        global user_email_unverified
 
         if login_data:
             for user_login in login_data:
@@ -267,10 +411,24 @@ def register():
                 'activated': False
             }
 
+            new_code = str(random.randint(1000, 9999))
+
+            new_unverified = {
+                'userid': id,
+                'username': request.json['username'],
+                'email': request.json['email'],
+                'code': new_code,
+                'attempt': 0,
+                'resend': 0
+            }
+
             login_data.append(new_user_login)
             user_data.append(new_user)
+            user_email_unverified.append(new_unverified)
 
-            return '', 204
+            success_email = send_email(request.json['username'], new_code, request.json['email'])
+
+            return make_response(({'id': id, 'username': request.json['username']}, 200))
 
         if error_code:
             return {'error': error}, error_code
@@ -285,10 +443,12 @@ def admin_delete_user():
         userid = int(request.args.get('userid'))
         global user_data
         global login_data
+        global user_email_unverified
+        global user_subordinate
+        global user_pinned
 
         if id == 0 != userid:
             new_user_data = []
-
             for user in user_data:
                 if user['id'] != userid:
                     new_user_data.append(user)
@@ -298,9 +458,25 @@ def admin_delete_user():
                 if user_login['id'] != userid:
                     new_login_data.append(user_login)
 
+            new_user_verif = []
+            for user_verif in user_email_unverified:
+                if user_verif['userid'] != userid:
+                    new_user_verif.append(user_verif)
+
+            new_user_pin = []
+            for each_pin in user_pinned:
+                if each_pin['userid'] != userid:
+                    new_user_pin.append(each_pin)
+
+            new_user_sub = []
+            for user_sub in user_subordinate:
+                if not (user_sub['id'] == userid) and not (user_sub['subordinate_id'] == userid):
+                    new_user_sub.append(user_sub)
+
             user_data = new_user_data
             login_data = new_login_data
-
+            user_email_unverified = new_user_verif
+            user_subordinate = new_user_sub
         else:
             error = 'You are trying to delete yourself!'
             error_code = 409
@@ -390,3 +566,57 @@ def update_user():
         else:
             return {'error': 'no user detected'}, 409
 
+
+def send_email(username, code, user_email):
+    import os
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from html_template.html_template import (
+        htmlFile, textFile
+    )
+
+    EMAIL_ADD_GMAIL = os.environ.get('EMAIL_USER_GMAIL')
+    EMAIL_PASS_GMAIL = os.environ.get('EMAIL_PASSWORD_GMAIL')
+    EMAIL_ADD_YAHOO = os.environ.get('EMAIL_USER_YAHOO')
+    EMAIL_PASS_YAHOO = os.environ.get('EMAIL_PASSWORD_YAHOO')
+
+    msg = MIMEMultipart('alternative')
+
+    msg['Subject'] = f'Verification code for Documenter'
+    msg['From'] = EMAIL_ADD_GMAIL
+    msg['To'] = EMAIL_ADD_YAHOO
+    # msg['To'] = user_email
+    new_text_file = textFile.replace('username-here', username)
+    new_text_file = new_text_file.replace('code-here', code)
+    new_html_file = htmlFile.replace('username-here', username)
+    new_html_file = new_html_file.replace('code-here', code)
+
+    part_text = MIMEText(new_text_file, 'plain')
+    part_html = MIMEText(new_html_file, 'html')
+
+    msg.attach(part_text)
+    msg.attach(part_html)
+
+    success = smtpSendoff('smtp.gmail.com', EMAIL_ADD_GMAIL, EMAIL_PASS_GMAIL, msg)
+
+    if not success:
+        return smtpSendoff('smtp.mail.yahoo.com', EMAIL_ADD_YAHOO, EMAIL_PASS_YAHOO, msg)
+    else:
+        return success
+
+    return False
+
+
+def smtpSendoff(smtp_server, email_address, email_password, msg):
+    import smtplib
+
+    with smtplib.SMTP_SSL(smtp_server, 465) as smtp:
+        smtp.login(email_address, email_password)
+        try:
+            smtp.send_message(msg)
+            print("email sent!")
+            return True
+        except smtplib.SMTPResponseException as err:
+            print("error sending code!")
+            print(err)
+            return False
