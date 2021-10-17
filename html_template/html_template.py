@@ -1,6 +1,6 @@
 textFile = f"Hello! username-here" \
            f"\nHere is the code for your verification: code-here" \
-           f"\nOr! you can click this link here: link-here" \
+           f"\nOr! you can go to this link here: link-here" \
            f"\nPlease don't respond to this email."
 
 htmlFile = """\
@@ -18,7 +18,7 @@ htmlFile = """\
 				code-here
 				</p>
 				<p style="text-align: center;">
-				Or! You could click this link instead!: 
+				Or! You could go to this link! 
 				</p>
 				<p style="text-align: center;font-size: 25px;">
 				<a href="link-here">

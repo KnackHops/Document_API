@@ -1,10 +1,11 @@
-from flask import (
-    Blueprint, request, make_response
-)
+from flask import Blueprint
+from flask import request
+from flask import make_response
 
 from flaskr import temp_db
 from flaskr import _qrcode
 from flaskr import _socketio
+from flaskr import valid_wrapper
 
 bp = Blueprint("document", __name__, url_prefix="/document")
 
@@ -15,7 +16,9 @@ docu_coded = temp_db.docu_coded
 
 socketidLists = {}
 
+
 @bp.route("/fetch/")
+@valid_wrapper
 def fetch():
     id = int(request.args.get('id'))
     which_get = request.args.get('which_get')
@@ -84,6 +87,7 @@ def fetch():
 
 
 @bp.route("/fetch-qr/")
+@valid_wrapper
 def fetch_qr():
     docid = int(request.args.get('docid'))
     global docu_coded
@@ -97,6 +101,7 @@ def fetch_qr():
 
 
 @bp.route('/fetch-doc-qr/')
+@valid_wrapper
 def fetch_doc_qr():
     str_code = request.args.get('str_code')
     userid = request.args.get('userid')
@@ -158,6 +163,7 @@ def generate_QR(id, title):
 
 
 @bp.route("/add", methods=('GET', 'POST'))
+@valid_wrapper
 def add():
     if request.method == 'POST':
         global docu_lists
@@ -188,6 +194,7 @@ def add():
 
 
 @bp.route("/edit", methods=('GET', 'PUT'))
+@valid_wrapper
 def edit():
     if request.method == 'PUT':
         id = request.json['id']
@@ -215,6 +222,7 @@ def edit():
 
 
 @bp.route('/pin-doc', methods=('GET', 'POST'))
+@valid_wrapper
 def pin_doc():
     if request.method == 'POST':
         global user_pinned
@@ -252,6 +260,7 @@ def pin_doc():
 
 
 @bp.route('/unpin-doc/', methods=('GET', 'DELETE'))
+@valid_wrapper
 def unpin_doc():
     if request.method == 'DELETE':
         global login_data

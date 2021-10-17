@@ -1,10 +1,11 @@
 import random
 
-from flask import (
-    Blueprint, request, make_response
-)
+from flask import Blueprint
+from flask import request
+from flask import make_response
 
 from flaskr import temp_db
+from flaskr import valid_wrapper
 
 bp = Blueprint("user", __name__)
 user_data = temp_db.user_data
@@ -15,6 +16,7 @@ user_email_unverified = temp_db.user_email_unverified
 
 
 @bp.route('/admin-fetch/')
+@valid_wrapper
 def admin_fetch():
     # error = None
     # error_code = None
@@ -59,6 +61,7 @@ def admin_fetch():
 
 
 @bp.route('/subordinate-fetch/')
+@valid_wrapper
 def friend_fetch():
     global login_data
     global user_data
@@ -108,6 +111,7 @@ def friend_fetch():
 
 
 @bp.route('/send-user-fetch', methods=('GET', 'POST'))
+@valid_wrapper
 def send_user_fetch():
     if request.method == 'POST':
         docid = request.json['docid']
@@ -132,6 +136,7 @@ def send_user_fetch():
 
 
 @bp.route('/admin-check', methods=('GET', 'POST'))
+@valid_wrapper
 def admin_check():
     if request.method == 'POST':
         error = 'Server Error'
@@ -158,6 +163,7 @@ def admin_check():
 
 
 @bp.route('/admin-activate', methods=('GET', 'PUT'))
+@valid_wrapper
 def admin_activate():
     if request.method == 'PUT':
         error = None
@@ -206,6 +212,7 @@ def admin_activate():
 
 
 @bp.route('/admin-role-change', methods=('GET', 'PUT'))
+@valid_wrapper
 def admin_role_change():
     if request.method == 'PUT':
         error = None
@@ -236,6 +243,7 @@ def admin_role_change():
 
 
 @bp.route('/login', methods=('GET', 'POST'))
+@valid_wrapper
 def login():
     if request.method == 'POST':
         # error = None
@@ -277,7 +285,59 @@ def login():
             return {'error': 'Server Error'}, 500
 
 
+@bp.route('/link-verify/')
+@valid_wrapper
+def link_verify():
+    if request.method == 'GET':
+        global user_email_unverified
+        global login_data
+        if len(user_email_unverified) > 0:
+            username = request.args.get('username')
+            # encrypt this dawg
+            code = request.args.get('code')
+            error = None
+
+            userid = None
+            for user in login_data:
+                if user['username'] == username:
+                    userid = user['id']
+
+            if not userid and not userid == 0:
+                return '<h1>User not found</h1>'
+
+            new_user_list = []
+            found = False
+
+            for user_unverif in user_email_unverified:
+                new_user = user_unverif
+                if new_user['userid'] == userid:
+                    found = True
+                    if new_user['attempt'] < 3:
+                        if not code == new_user['code']:
+                            error = 'Code is incorrect!'
+                            new_user['attempt'] = new_user['attempt'] + 1
+                            new_user_list.append(new_user)
+                    else:
+                        error = "Reach the limit for verification attempt for this user"
+                else:
+                    new_user_list.append(user_unverif)
+
+            if found:
+                if error:
+                    return f'<h1>{error}</h1>'
+                else:
+                    user_email_unverified = new_user_list
+                    return f'<h1>User verified! ' \
+                           f'Please wait for your account to be activated by and admin!\n' \
+                           f'<a href="http://localhost:3000/landing-page">Visit the website</a></h1>'
+            else:
+                return "<h1>User already verified!<h1>"
+        else:
+            return "<h1>No unverified email</h1>"
+
+
 @bp.route('/verify-user', methods=('GET', 'PUT'))
+@valid_wrapper
 def verify_user():
     if request.method == 'PUT':
         global user_email_unverified
@@ -312,6 +372,7 @@ def verify_user():
 
 
 @bp.route('/resend-verification', methods=('GET', 'PUT'))
+@valid_wrapper
 def resend_verification():
     if request.method == 'PUT':
         global user_email_unverified
@@ -351,6 +412,7 @@ def resend_verification():
 
 
 @bp.route('/reset-user-verify-info', methods=('GET', 'PUT'))
+@valid_wrapper
 def reset_user_attempt():
     if request.method == 'PUT':
         userid = request.json['userid']
@@ -371,6 +433,7 @@ def reset_user_attempt():
 
 
 @bp.route('/register', methods=('GET', 'POST'))
+@valid_wrapper
 def register():
     if request.method == 'POST':
         error = None
@@ -435,6 +498,7 @@ def register():
 
 
 @bp.route('/admin-delete-user/', methods=('GET', 'DELETE'))
+@valid_wrapper
 def admin_delete_user():
     if request.method == 'DELETE':
         error = None
@@ -488,6 +552,7 @@ def admin_delete_user():
 
 
 @bp.route('/add-subordinate', methods=('GET', 'PUT'))
+@valid_wrapper
 def add_subordinate():
     if request.method == 'PUT':
         id = request.json['id']
@@ -512,6 +577,7 @@ def add_subordinate():
 
 
 @bp.route('/remove-subordinate/', methods=('GET', 'DELETE'))
+@valid_wrapper
 def remove_subordinate():
     if request.method == 'DELETE':
         id = int(request.args.get('id'))
@@ -539,6 +605,7 @@ def remove_subordinate():
 
 
 @bp.route('/update-user', methods=('GET', 'PUT'))
+@valid_wrapper
 def update_user():
     if request.method == 'PUT':
         userid = request.json['userid']
@@ -584,12 +651,17 @@ def send_email(username, code, user_email):
 
     msg['Subject'] = f'Verification code for Documenter'
     msg['From'] = EMAIL_ADD_GMAIL
-    msg['To'] = EMAIL_ADD_YAHOO
+    msg['To'] = EMAIL_ADD_GMAIL
     # msg['To'] = user_email
+
+    link = f'http://127.0.0.1:5000/link-verify/?username={username}&code={code}'
     new_text_file = textFile.replace('username-here', username)
     new_text_file = new_text_file.replace('code-here', code)
+    new_text_file = new_text_file.replace('link-here', link)
+
     new_html_file = htmlFile.replace('username-here', username)
     new_html_file = new_html_file.replace('code-here', code)
+    new_html_file = new_html_file.replace('link-here', link)
 
     part_text = MIMEText(new_text_file, 'plain')
     part_html = MIMEText(new_html_file, 'html')
