@@ -1,9 +1,10 @@
-from flask import (
-    Blueprint, request, make_response
-)
+from flask import Blueprint
+from flask import request
+from flask import make_response
 
 from flaskr import temp_db
-from flaskr import _qrcode
+from flaskr import valid_wrapper
+from flaskr import clean_id_wrapper
 
 bp = Blueprint("document", __name__, url_prefix="/document")
 
@@ -14,8 +15,9 @@ docu_coded = temp_db.docu_coded
 
 
 @bp.route("/fetch/")
-def fetch():
-    id = int(request.args.get('id'))
+@valid_wrapper
+@clean_id_wrapper
+def fetch(id):
     which_get = request.args.get('which_get')
     global docu_lists
     global user_pinned
@@ -82,8 +84,9 @@ def fetch():
 
 
 @bp.route("/fetch-qr/")
-def fetch_qr():
-    docid = int(request.args.get('docid'))
+@valid_wrapper
+@clean_id_wrapper
+def fetch_qr(docid):
     global docu_coded
 
     if len(docu_coded) > 0:
@@ -95,9 +98,10 @@ def fetch_qr():
 
 
 @bp.route('/fetch-doc-qr/')
-def fetch_doc_qr():
+@valid_wrapper
+@clean_id_wrapper
+def fetch_doc_qr(userid):
     str_code = request.args.get('str_code')
-    userid = request.args.get('userid')
     global docu_coded
     global docu_lists
     global user_pinned
@@ -156,6 +160,7 @@ def generate_QR(id, title):
 
 
 @bp.route("/add", methods=('GET', 'POST'))
+@valid_wrapper
 def add():
     if request.method == 'POST':
         global docu_lists
@@ -186,9 +191,10 @@ def add():
 
 
 @bp.route("/edit", methods=('GET', 'PUT'))
-def edit():
+@valid_wrapper
+@clean_id_wrapper
+def edit(id):
     if request.method == 'PUT':
-        id = request.json['id']
         title = request.json['title']
         document = request.json['document']
         global docu_lists
@@ -213,13 +219,13 @@ def edit():
 
 
 @bp.route('/pin-doc', methods=('GET', 'POST'))
-def pin_doc():
+@valid_wrapper
+@clean_id_wrapper
+def pin_doc(userid, docid):
     if request.method == 'POST':
         global user_pinned
         global login_data
 
-        userid = request.json['userid']
-        docid = request.json['docid']
         doctitle = request.json['doctitle']
 
         found = False
@@ -250,13 +256,13 @@ def pin_doc():
 
 
 @bp.route('/unpin-doc/', methods=('GET', 'DELETE'))
-def unpin_doc():
+@valid_wrapper
+@clean_id_wrapper
+def unpin_doc(userid, docid):
     if request.method == 'DELETE':
         global login_data
         global docu_lists
         global user_pinned
-        userid = int(request.args.get('userid'))
-        docid = int(request.args.get('docid'))
 
         found = False
         for user_login in login_data:

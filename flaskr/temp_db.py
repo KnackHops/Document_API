@@ -24,6 +24,15 @@ user_data = [{
     },
 ]
 
+user_email_unverified = [
+]
+
+# new_unverified = {
+#                 'userid': id,
+#                 'fullname': request.json['fullname'],
+#                 'email': request.json['email']
+#             }
+
 user_pinned = []
 
 # user_pinned = [{
