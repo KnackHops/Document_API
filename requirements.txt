@@ -16,4 +16,5 @@ python-engineio==4.2.1
 python-socketio==5.4.0
 qrcode==7.3.1
 six==1.16.0
+waitress==2.0.0
 Werkzeug==2.0.2
