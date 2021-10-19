@@ -1,11 +1,14 @@
 import random
 
+from functools import wraps
+
 from flask import Blueprint
 from flask import request
 from flask import make_response
 
 from flaskr import temp_db
 from flaskr import valid_wrapper
+from flaskr import clean_id_wrapper
 
 bp = Blueprint("user", __name__)
 user_data = temp_db.user_data
@@ -14,10 +17,31 @@ user_pinned = temp_db.user_pinned
 user_subordinate = temp_db.user_subordinate
 user_email_unverified = temp_db.user_email_unverified
 
+password_attempt = {}
+
+
+def check_space_data_wrapper(func):
+    @wraps(func)
+    def inside(*args, **kwargs):
+        if request.args:
+            data = request.args.to_dict()
+        else:
+            data = request.json
+
+        space_protocol_alert = check_key_space(data)
+
+        if space_protocol_alert:
+            return {"error": f"Invalid whitespace in {space_protocol_alert}"}
+
+        return func(*args, **kwargs)
+    return inside
+
 
 @bp.route('/admin-fetch/')
 @valid_wrapper
-def admin_fetch():
+@check_space_data_wrapper
+@clean_id_wrapper
+def admin_fetch(id):
     # error = None
     # error_code = None
     global login_data
@@ -26,8 +50,9 @@ def admin_fetch():
 
     if len(login_data) > 1:
         users = []
+
         for user in user_data:
-            if not user['id'] == 0 and not user['id'] == int(request.args.get('id')):
+            if not user['id'] == 0 and not user['id'] == id:
                 for user_login in login_data:
                     if user_login['id'] == user['id']:
                         verified = True
@@ -62,11 +87,12 @@ def admin_fetch():
 
 @bp.route('/subordinate-fetch/')
 @valid_wrapper
-def friend_fetch():
+@check_space_data_wrapper
+@clean_id_wrapper
+def friend_fetch(id):
     global login_data
     global user_data
     global user_subordinate
-    id = int(request.args.get('id'))
 
     if len(login_data) > 1:
         users = []
@@ -112,13 +138,13 @@ def friend_fetch():
 
 @bp.route('/send-user-fetch', methods=('GET', 'POST'))
 @valid_wrapper
-def send_user_fetch():
+@check_space_data_wrapper
+@clean_id_wrapper
+def send_user_fetch(docid):
     if request.method == 'POST':
-        docid = request.json['docid']
         id_lists = request.json['id_lists']
         global user_data
         global user_pinned
-        print(docid, id_lists)
 
         if len(user_pinned) == 0:
             return make_response(({'id_filtered': id_lists}, 200))
@@ -137,11 +163,12 @@ def send_user_fetch():
 
 @bp.route('/admin-check', methods=('GET', 'POST'))
 @valid_wrapper
-def admin_check():
+@check_space_data_wrapper
+@clean_id_wrapper
+def admin_check(id):
     if request.method == 'POST':
         error = 'Server Error'
         error_code = 500
-        id = request.json['id']
         password = request.json['password']
 
         global user_data
@@ -164,12 +191,13 @@ def admin_check():
 
 @bp.route('/admin-activate', methods=('GET', 'PUT'))
 @valid_wrapper
-def admin_activate():
+@check_space_data_wrapper
+@clean_id_wrapper
+def admin_activate(id, userid):
     if request.method == 'PUT':
         error = None
         error_code = None
-        id = request.json['id']
-        userid = request.json['userid']
+
         global user_data
         global user_email_unverified
 
@@ -213,12 +241,12 @@ def admin_activate():
 
 @bp.route('/admin-role-change', methods=('GET', 'PUT'))
 @valid_wrapper
-def admin_role_change():
+@check_space_data_wrapper
+@clean_id_wrapper
+def admin_role_change(id, userid):
     if request.method == 'PUT':
         error = None
         error_code = None
-        id = request.json['id']
-        userid = request.json['userid']
         role = request.json['role']
         global user_data
 
@@ -244,6 +272,7 @@ def admin_role_change():
 
 @bp.route('/login', methods=('GET', 'POST'))
 @valid_wrapper
+@check_space_data_wrapper
 def login():
     if request.method == 'POST':
         # error = None
@@ -252,10 +281,22 @@ def login():
         global login_data
         global user_data
         global user_email_unverified
+        username = request.json['username']
+        password = request.json['password']
 
         for user_login in login_data:
-            if user_login['username'] == request.json['username']:
-                if user_login['password'] == request.json['password']:
+            if user_login['username'] == username:
+                # user_str = f'user{username}'
+                #
+                # if user_str in password_attempt:
+                #     if password_attempt[user_str] < 10:
+                #         password_attempt[user_str] += 1
+                #     else:
+                #         return {'error': 'max attempt reached'}, 500
+                # else:
+                #     password_attempt[user_str] = 0
+
+                if user_login['password'] == password:
                     id = user_login['id']
 
         if id or id == 0:
@@ -278,15 +319,17 @@ def login():
                                 return_user['activated'] = False
 
             return_user['id'] = id
-            return_user['username'] = request.json['username']
+            return_user['username'] = username
 
             return make_response((return_user, 200))
         else:
-            return {'error': 'Server Error'}, 500
+
+            return {'error': 'Wrong password or Username'}, 500
 
 
 @bp.route('/link-verify/')
 @valid_wrapper
+@check_space_data_wrapper
 def link_verify():
     if request.method == 'GET':
         global user_email_unverified
@@ -338,12 +381,13 @@ def link_verify():
 
 @bp.route('/verify-user', methods=('GET', 'PUT'))
 @valid_wrapper
-def verify_user():
+@check_space_data_wrapper
+@clean_id_wrapper
+def verify_user(userid):
     if request.method == 'PUT':
         global user_email_unverified
         if len(user_email_unverified) > 0:
             error = None
-            userid = request.json['userid']
             code = request.json['code']
 
             new_user_list = []
@@ -373,10 +417,11 @@ def verify_user():
 
 @bp.route('/resend-verification', methods=('GET', 'PUT'))
 @valid_wrapper
-def resend_verification():
+@check_space_data_wrapper
+@clean_id_wrapper
+def resend_verification( userid ):
     if request.method == 'PUT':
         global user_email_unverified
-        userid = request.json['userid']
         new_code = str(random.randint(1000, 9999))
 
         if len(user_email_unverified) > 0:
@@ -413,9 +458,10 @@ def resend_verification():
 
 @bp.route('/reset-user-verify-info', methods=('GET', 'PUT'))
 @valid_wrapper
-def reset_user_attempt():
+@check_space_data_wrapper
+@clean_id_wrapper
+def reset_user_attempt(userid):
     if request.method == 'PUT':
-        userid = request.json['userid']
         which_change = request.json['which_change']
 
         if len(user_email_unverified) > 0:
@@ -434,6 +480,7 @@ def reset_user_attempt():
 
 @bp.route('/register', methods=('GET', 'POST'))
 @valid_wrapper
+@check_space_data_wrapper
 def register():
     if request.method == 'POST':
         error = None
@@ -499,12 +546,12 @@ def register():
 
 @bp.route('/admin-delete-user/', methods=('GET', 'DELETE'))
 @valid_wrapper
-def admin_delete_user():
+@check_space_data_wrapper
+@clean_id_wrapper
+def admin_delete_user(id, userid):
     if request.method == 'DELETE':
         error = None
         error_code = None
-        id = int(request.args.get('id'))
-        userid = int(request.args.get('userid'))
         global user_data
         global login_data
         global user_email_unverified
@@ -553,10 +600,10 @@ def admin_delete_user():
 
 @bp.route('/add-subordinate', methods=('GET', 'PUT'))
 @valid_wrapper
-def add_subordinate():
+@check_space_data_wrapper
+@clean_id_wrapper
+def add_subordinate(id, userid):
     if request.method == 'PUT':
-        id = request.json['id']
-        userid = request.json['userid']
         global user_subordinate
         global user_data
 
@@ -578,10 +625,10 @@ def add_subordinate():
 
 @bp.route('/remove-subordinate/', methods=('GET', 'DELETE'))
 @valid_wrapper
-def remove_subordinate():
+@check_space_data_wrapper
+@clean_id_wrapper
+def remove_subordinate(id, userid):
     if request.method == 'DELETE':
-        id = int(request.args.get('id'))
-        userid = int(request.args.get('userid'))
         global user_data
         global user_subordinate
 
@@ -606,9 +653,10 @@ def remove_subordinate():
 
 @bp.route('/update-user', methods=('GET', 'PUT'))
 @valid_wrapper
-def update_user():
+@check_space_data_wrapper
+@clean_id_wrapper
+def update_user(userid):
     if request.method == 'PUT':
-        userid = request.json['userid']
         val = request.json['val']
         which = request.json['which']
         global user_data
@@ -669,17 +717,17 @@ def send_email(username, code, user_email):
     msg.attach(part_text)
     msg.attach(part_html)
 
-    success = smtpSendoff('smtp.gmail.com', EMAIL_ADD_GMAIL, EMAIL_PASS_GMAIL, msg)
+    success = smtp_send_off('smtp.gmail.com', EMAIL_ADD_GMAIL, EMAIL_PASS_GMAIL, msg)
 
     if not success:
-        return smtpSendoff('smtp.mail.yahoo.com', EMAIL_ADD_YAHOO, EMAIL_PASS_YAHOO, msg)
+        return smtp_send_off('smtp.mail.yahoo.com', EMAIL_ADD_YAHOO, EMAIL_PASS_YAHOO, msg)
     else:
         return success
 
     return False
 
 
-def smtpSendoff(smtp_server, email_address, email_password, msg):
+def smtp_send_off(smtp_server, email_address, email_password, msg):
     import smtplib
 
     with smtplib.SMTP_SSL(smtp_server, 465) as smtp:
@@ -692,3 +740,15 @@ def smtpSendoff(smtp_server, email_address, email_password, msg):
             print("error sending code!")
             print(err)
             return False
+
+
+def check_key_space(data):
+    key_lists = ["email", "username", "password", "id", "userid", "mobile", "role", "docid", "code"]
+
+    for key in data:
+        if key in key_lists:
+            if not type(data[key]) == int:
+                if " " in data[key]:
+                    return key
+
+    return False
